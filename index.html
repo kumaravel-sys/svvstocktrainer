@@ -1,0 +1,405 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>VSE Stock Trainer</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; margin:0; padding:0; background:#f5f7fb; color:#111 }
+    header { background:#0f1724; color:white; padding:12px 20px; display:flex; justify-content:space-between; align-items:center }
+    header h1 { margin:0; font-size:18px }
+    .container { padding:20px; max-width:1100px; margin:24px auto; background:white; border-radius:10px; box-shadow:0 6px 20px rgba(10,20,40,0.06) }
+    input, button, select { padding:10px; border-radius:6px; border:1px solid #cbd5e1; font-size:14px }
+    button { cursor:pointer; background:#0f1724; color:white; border:none }
+    .hidden { display:none }
+    .search-suggestions { background:#fff; border:1px solid #e2e8f0; margin-top:6px; max-height:200px; overflow:auto; border-radius:6px; }
+    .suggest-item { padding:8px; cursor:pointer; border-bottom:1px solid #f1f5f9 }
+    .suggest-item:hover { background:#f8fafc }
+    table { width:100%; border-collapse:collapse; margin-top:12px }
+    th, td { text-align:left; padding:8px; border-bottom:1px solid #f1f5f9 }
+    .card { padding:12px; border-radius:8px; background:#fff; box-shadow:0 4px 10px rgba(15,23,42,0.04); }
+    .small { font-size:13px; color:#475569 }
+    .danger { color:#dc2626 }
+    footer { text-align:center; padding:16px; color:#475569; font-size:13px }
+  </style>
+</head>
+<body>
+<header>
+  <h1>VSE Stock Trainer</h1>
+</header>
+
+<main class="container">
+
+  <!-- COMMON PASSWORD -->
+  <section id="view-common-password">
+    <h2>Enter Common Password</h2>
+    <input type="password" id="common-password-input" placeholder="Enter password" style="width:100%; margin-bottom:8px" />
+    <button id="btn-common-password">Submit</button>
+    <p class="small">Password for all users: <b>vse2k25</b></p>
+    <p id="common-pass-msg" class="small" style="color:red;"></p>
+  </section>
+
+  <!-- LOGIN -->
+  <section id="view-login" class="hidden">
+    <h2>Login / Guest</h2>
+    <input id="email" type="email" placeholder="Email" style="width:100%; margin-bottom:8px" />
+    <input id="password" type="password" placeholder="Password" style="width:100%; margin-bottom:8px" />
+    <div style="display:flex; gap:8px;">
+      <button id="btn-login">Login / Create Account</button>
+      <button id="btn-guest" style="background:#334155">Guest Login</button>
+    </div>
+    <p id="login-msg" class="small" style="margin-top:10px;color:#475569"></p>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section id="view-dashboard" class="hidden">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h2>Dashboard</h2>
+      <div>
+        <span id="user-email" class="small"></span>
+        <button id="btn-logout" style="margin-left:12px;background:#ef4444">Logout</button>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:12px; display:flex; gap:16px; align-items:flex-start;">
+      <div style="flex:1">
+        <div class="card">
+          <div style="display:flex; gap:12px; align-items:center;">
+            <input id="search-input" placeholder="Search company by name (e.g., Tata Motors)" style="flex:1" />
+            <button id="btn-search">Search</button>
+          </div>
+          <div id="suggestions" class="search-suggestions hidden"></div>
+        </div>
+
+        <div id="stock-panel" class="card hidden" style="margin-top:12px">
+          <h3 id="stock-name">Select a company</h3>
+          <div id="tv-widget-wrap" style="height:420px"></div>
+          <div style="display:flex; gap:10px; margin-top:8px; align-items:center;">
+            <div class="small">Price: <b id="live-price">-</b></div>
+            <div style="margin-left:auto; display:flex; gap:8px; align-items:center">
+              <input id="qty" type="number" min="1" value="1" style="width:100px"/>
+              <button id="btn-buy">Buy</button>
+              <button id="btn-sell" style="background:#ef4444">Sell</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:12px">
+          <h3>Portfolio</h3>
+          <div class="small">Balance: <b id="balance">-</b></div>
+          <table id="portfolio-table">
+            <thead><tr><th>Symbol</th><th>Qty</th><th>Avg Price</th><th>Curr Price</th><th>Value</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="width:420px">
+        <div id="admin-link-card" class="card hidden">
+          <h3>Admin Panel</h3>
+          <button id="btn-open-admin">Open Admin Panel</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ADMIN -->
+  <section id="view-admin" class="hidden">
+    <h2>Admin Panel</h2>
+    <button id="btn-admin-back" style="background:#334155;color:white;">Back</button>
+    <table id="admin-users-table" style="margin-top:12px; width:100%; border-collapse:collapse;">
+      <thead><tr><th>#</th><th>Email</th><th>Balance</th><th>Total Value</th><th>Profit/Loss</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+
+</main>
+
+<footer>
+  Made with virtual money. Twelve Data API + TradingView used for live charts.
+</footer>
+
+<!-- TradingView widget -->
+<script src="https://s3.tradingview.com/tv.js"></script>
+
+<!-- Firebase & App -->
+<script type="module">
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-app.js";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-auth.js";
+import { getFirestore, doc, setDoc, getDoc, collection, getDocs, updateDoc } from "https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore.js";
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyBFLVuBT-sSdcq-MjiL5tB17mfeNpP2jN8",
+  authDomain: "vsestocktrainer-a5b04.firebaseapp.com",
+  projectId: "vsestocktrainer-a5b04",
+  storageBucket: "vsestocktrainer-a5b04.firebasestorage.app",
+  messagingSenderId: "652083011735",
+  appId: "1:652083011735:web:3ab6396a3d5888abec49d2"
+};
+
+const app = initializeApp(FIREBASE_CONFIG);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+const TWELVE_API = "c933f15065e54a7b9d8908b084d72de1";
+const ADMIN_EMAIL = "admin6@vse.com";
+const ADMIN_PASSWORD = "adminvse2k25";
+const COMMON_PASSWORD = "vse2k25";
+
+const viewCommon = document.getElementById('view-common-password');
+const viewLogin = document.getElementById('view-login');
+const viewDashboard = document.getElementById('view-dashboard');
+const viewAdmin = document.getElementById('view-admin');
+
+const commonInput = document.getElementById('common-password-input');
+const commonBtn = document.getElementById('btn-common-password');
+const commonMsg = document.getElementById('common-pass-msg');
+
+const emailEl = document.getElementById('email');
+const pwdEl = document.getElementById('password');
+const btnLogin = document.getElementById('btn-login');
+const btnGuest = document.getElementById('btn-guest');
+const btnLogout = document.getElementById('btn-logout');
+const loginMsg = document.getElementById('login-msg');
+
+const userEmailLabel = document.getElementById('user-email');
+const balanceEl = document.getElementById('balance');
+const portfolioTableBody = document.querySelector('#portfolio-table tbody');
+
+const searchInput = document.getElementById('search-input');
+const btnSearch = document.getElementById('btn-search');
+const suggestionsEl = document.getElementById('suggestions');
+
+const stockPanel = document.getElementById('stock-panel');
+const stockNameEl = document.getElementById('stock-name');
+const tvWidgetWrap = document.getElementById('tv-widget-wrap');
+const livePriceEl = document.getElementById('live-price');
+const qtyEl = document.getElementById('qty');
+const btnBuy = document.getElementById('btn-buy');
+const btnSell = document.getElementById('btn-sell');
+
+const adminCard = document.getElementById('admin-link-card');
+const btnOpenAdmin = document.getElementById('btn-open-admin');
+const btnAdminBack = document.getElementById('btn-admin-back');
+const adminUsersTableBody = document.querySelector('#admin-users-table tbody');
+
+let currentUser = null;
+let currentPortfolio = {};
+let balance = 50000;
+let currentStockSymbol = "";
+
+/////////////////////////// COMMON PASSWORD ///////////////////////////
+
+commonBtn.addEventListener('click', ()=>{
+  if(commonInput.value === COMMON_PASSWORD){
+    viewCommon.classList.add('hidden');
+    viewLogin.classList.remove('hidden');
+  } else {
+    commonMsg.textContent = "Wrong common password!";
+  }
+});
+
+/////////////////////////// LOGIN ///////////////////////////
+
+btnLogin.addEventListener('click', async ()=>{
+  const email = emailEl.value.trim();
+  const pwd = pwdEl.value.trim();
+  if(!email || !pwd){ loginMsg.textContent = "Enter email and password"; return; }
+  try {
+    await signInWithEmailAndPassword(auth,email,pwd);
+  } catch(e){
+    // If user not exist, create account
+    try { await createUserWithEmailAndPassword(auth,email,pwd); } 
+    catch(err){ loginMsg.textContent = err.message; return; }
+  }
+});
+
+btnGuest.addEventListener('click', async ()=>{
+  const guestEmail = "guest_"+Date.now()+"@vse.com";
+  const guestPwd = "guest123";
+  try {
+    await createUserWithEmailAndPassword(auth,guestEmail,guestPwd);
+  } catch(e){
+    await signInWithEmailAndPassword(auth,guestEmail,guestPwd);
+  }
+});
+
+btnLogout.addEventListener('click', async ()=>{
+  await signOut(auth);
+  viewDashboard.classList.add('hidden');
+  viewLogin.classList.remove('hidden');
+});
+
+onAuthStateChanged(auth, async user=>{
+  if(user){
+    currentUser = user;
+    viewLogin.classList.add('hidden');
+    viewDashboard.classList.remove('hidden');
+    userEmailLabel.textContent = user.email;
+    if(user.email === ADMIN_EMAIL) adminCard.classList.remove('hidden');
+    await loadUserPortfolio();
+  } else {
+    currentUser = null;
+  }
+});
+
+/////////////////////////// PORTFOLIO ///////////////////////////
+
+async function loadUserPortfolio(){
+  const docRef = doc(db,"portfolios",currentUser.uid);
+  const docSnap = await getDoc(docRef);
+  if(docSnap.exists()){
+    const data = docSnap.data();
+    currentPortfolio = data.stocks || {};
+    balance = data.balance || 50000;
+  } else {
+    currentPortfolio = {};
+    balance = 50000;
+    await setDoc(docRef,{balance,stocks:{}});
+  }
+  updatePortfolioUI();
+}
+
+async function savePortfolio(){
+  const docRef = doc(db,"portfolios",currentUser.uid);
+  await setDoc(docRef,{balance,stocks:currentPortfolio});
+}
+
+function updatePortfolioUI(){
+  balanceEl.textContent = "₹"+balance.toFixed(2);
+  portfolioTableBody.innerHTML = "";
+  for(const sym in currentPortfolio){
+    const stock = currentPortfolio[sym];
+    const row = `<tr><td>${sym}</td><td>${stock.qty}</td><td>${stock.avgPrice}</td><td>${stock.currPrice}</td><td>${(stock.currPrice*stock.qty).toFixed(2)}</td></tr>`;
+    portfolioTableBody.innerHTML += row;
+  }
+}
+
+/////////////////////////// SEARCH & TRADINGVIEW ///////////////////////////
+
+async function searchCompany(query){
+  if(!query) return [];
+  const url = `https://api.twelvedata.com/symbol_search?symbol=${query}&apikey=${TWELVE_API}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  return data.data || [];
+}
+
+function makeTradingViewSymbol(apiSymbol){
+  if(!apiSymbol) return null;
+  if(apiSymbol.endsWith(".NS")) return "NSE:"+apiSymbol.replace(".NS","");
+  if(apiSymbol.endsWith(".BO")) return "BSE:"+apiSymbol.replace(".BO","");
+  return apiSymbol;
+}
+
+async function fetchPrice(apiSymbol){
+  const url = `https://api.twelvedata.com/price?symbol=${apiSymbol}&apikey=${TWELVE_API}`;
+  const res = await fetch(url);
+  const data = await res.json();
+  if(data.price) return parseFloat(data.price);
+  return null;
+}
+
+btnSearch.addEventListener('click', async ()=>{
+  const query = searchInput.value.trim();
+  const results = await searchCompany(query);
+  if(results.length === 0){
+    suggestionsEl.innerHTML = "<div class='small danger'>No results found</div>";
+    suggestionsEl.classList.remove('hidden');
+    return;
+  }
+  suggestionsEl.innerHTML = results.map(r=>`<div class="suggest-item" data-symbol="${r.symbol}">${r.name} (${r.symbol})</div>`).join("");
+  suggestionsEl.classList.remove('hidden');
+});
+
+suggestionsEl.addEventListener('click', async (e)=>{
+  if(e.target.classList.contains('suggest-item')){
+    const sym = e.target.getAttribute('data-symbol');
+    const tvSym = makeTradingViewSymbol(sym);
+    if(!tvSym){
+      alert("Symbol not supported in TradingView");
+      return;
+    }
+    currentStockSymbol = sym;
+    stockPanel.classList.remove('hidden');
+    stockNameEl.textContent = e.target.textContent;
+    const price = await fetchPrice(sym);
+    livePriceEl.textContent = price? "₹"+price.toFixed(2) : "-";
+    new TradingView.widget({
+      width: "100%",
+      height: 420,
+      symbol: tvSym,
+      interval: "60",
+      timezone: "Asia/Kolkata",
+      theme: "light",
+      style: "1",
+      locale: "en",
+      container_id: "tv-widget-wrap"
+    });
+    suggestionsEl.classList.add('hidden');
+  }
+});
+
+/////////////////////////// BUY/SELL ///////////////////////////
+
+btnBuy.addEventListener('click', async ()=>{
+  const qty = parseInt(qtyEl.value);
+  if(!currentStockSymbol || qty<=0) return;
+  const price = await fetchPrice(currentStockSymbol);
+  if(!price) return;
+  const cost = price*qty;
+  if(cost>balance){ alert("Not enough balance"); return; }
+  balance -= cost;
+  if(currentPortfolio[currentStockSymbol]){
+    const stock = currentPortfolio[currentStockSymbol];
+    stock.avgPrice = ((stock.avgPrice*stock.qty)+cost)/(stock.qty+qty);
+    stock.qty += qty;
+    stock.currPrice = price;
+  } else currentPortfolio[currentStockSymbol] = {qty, avgPrice:price, currPrice:price};
+  await savePortfolio();
+  updatePortfolioUI();
+});
+
+btnSell.addEventListener('click', async ()=>{
+  const qty = parseInt(qtyEl.value);
+  if(!currentStockSymbol || qty<=0) return;
+  const stock = currentPortfolio[currentStockSymbol];
+  if(!stock || stock.qty<qty){ alert("Not enough stock"); return; }
+  const price = await fetchPrice(currentStockSymbol);
+  const value = price*qty;
+  stock.qty -= qty;
+  stock.currPrice = price;
+  balance += value;
+  if(stock.qty===0) delete currentPortfolio[currentStockSymbol];
+  await savePortfolio();
+  updatePortfolioUI();
+});
+
+/////////////////////////// ADMIN ///////////////////////////
+
+btnOpenAdmin.addEventListener('click', async ()=>{
+  viewDashboard.classList.add('hidden');
+  viewAdmin.classList.remove('hidden');
+  const colRef = collection(db,"portfolios");
+  const docs = await getDocs(colRef);
+  adminUsersTableBody.innerHTML = "";
+  let i=1;
+  docs.forEach(doc=>{
+    const data = doc.data();
+    let totalVal = 0;
+    for(const s in data.stocks){
+      totalVal += data.stocks[s].currPrice*data.stocks[s].qty;
+    }
+    const profit = totalVal + (data.balance||0) - 50000;
+    const row = `<tr><td>${i++}</td><td>${doc.id}</td><td>${data.balance||0}</td><td>${totalVal.toFixed(2)}</td><td>${profit.toFixed(2)}</td></tr>`;
+    adminUsersTableBody.innerHTML += row;
+  });
+});
+
+btnAdminBack.addEventListener('click', ()=>{
+  viewAdmin.classList.add('hidden');
+  viewDashboard.classList.remove('hidden');
+});
+
+</script>
